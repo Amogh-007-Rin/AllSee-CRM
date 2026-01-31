@@ -1,14 +1,103 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// This schema must be applied to server/prisma/schema.prisma
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// 1. Organization Hierarchy
+// Supports infinite nesting, but we focus on 2 levels: HQ (Parent) -> Site (Child)
+model Organization {
+  id            String         @id @default(uuid())
+  name          String
+  type          OrgType        @default(CHILD) // PARENT or CHILD
+  billingMode   BillingMode    @default(END_USER_CAN_PAY) // Reseller Constraint
+  
+  // Hierarchy Logic
+  parentId      String?
+  parent        Organization?  @relation("OrgHierarchy", fields: [parentId], references: [id])
+  children      Organization[] @relation("OrgHierarchy")
+
+  // Relations
+  devices       Device[]
+  users         User[]
+  renewalRequests RenewalRequest[]
+}
+
+// 2. Users (RBAC)
+model User {
+  id             String       @id @default(uuid())
+  email          String       @unique
+  password       String       // Hashed
+  name           String
+  role           UserRole     @default(VIEWER) 
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+}
+
+// 3. The Digital Signage Assets
+model Device {
+  id             String        @id @default(uuid())
+  name           String        // e.g., "Reception Screen"
+  location       String        // e.g., "Building A, Floor 1"
+  serialNumber   String        @unique
+  
+  // License State Machine
+  licenseKey     String?
+  status         LicenseStatus @default(ACTIVE)
+  expiryDate     DateTime
+  graceTokenExpiry DateTime?
+  
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+// 4. The Communication Layer (Child -> Parent)
+model RenewalRequest {
+  id             String        @id @default(uuid())
+  createdAt      DateTime      @default(now())
+  status         RequestStatus @default(PENDING)
+  
+  // Who asked for it?
+  requesterOrgId String
+  requesterOrg   Organization  @relation(fields: [requesterOrgId], references: [id])
+  
+  // Optional: Link to specific devices if partial renewal
+  deviceIds      String[]
+  notes          String?
+}
+
+// Enums
+enum OrgType {
+  PARENT
+  CHILD
+}
+
+enum BillingMode {
+  END_USER_CAN_PAY
+  RESELLER_ONLY
+}
+
+enum UserRole {
+  ADMIN
+  VIEWER
+}
+
+enum LicenseStatus {
+  ACTIVE         // Green (> 60 days)
+  EXPIRING_SOON  // Amber (< 60 days)
+  EXPIRED        // Red (Grace Period Active)
+  SUSPENDED      // Black Screen (Service Cut)
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
