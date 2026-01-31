@@ -50,6 +50,9 @@ model Device {
   status         LicenseStatus @default(ACTIVE)
   expiryDate     DateTime
   graceTokenExpiry DateTime?
+
+  latitude       Float?
+  longitude      Float?
   
   organizationId String
   organization   Organization  @relation(fields: [organizationId], references: [id])

@@ -13,6 +13,12 @@ const prisma = new PrismaClient({ adapter })
 async function main() {
   console.log('Start seeding ...')
 
+  // Clean up existing data
+  await prisma.renewalRequest.deleteMany({})
+  await prisma.device.deleteMany({})
+  await prisma.user.deleteMany({})
+  await prisma.organization.deleteMany({})
+
   // 1. Create Organizations
   const hq = await prisma.organization.create({
     data: {
@@ -74,6 +80,8 @@ async function main() {
         serialNumber: `LDN-ACT-${i}`,
         status: LicenseStatus.ACTIVE,
         expiryDate: expiryDate,
+        latitude: 51.5074 + (Math.random() * 0.01 - 0.005),
+        longitude: -0.1278 + (Math.random() * 0.01 - 0.005),
         organizationId: london.id,
       },
     })
@@ -90,6 +98,8 @@ async function main() {
         serialNumber: `LDN-WARN-${i}`,
         status: LicenseStatus.EXPIRING_SOON,
         expiryDate: expiryDate,
+        latitude: 51.5074 + (Math.random() * 0.01 - 0.005),
+        longitude: -0.1278 + (Math.random() * 0.01 - 0.005),
         organizationId: london.id,
       },
     })
@@ -106,7 +116,28 @@ async function main() {
         serialNumber: `LDN-EXP-${i}`,
         status: LicenseStatus.EXPIRED,
         expiryDate: expiryDate,
+        latitude: 51.5074 + (Math.random() * 0.01 - 0.005),
+        longitude: -0.1278 + (Math.random() * 0.01 - 0.005),
         organizationId: london.id,
+      },
+    })
+  }
+
+  // Manchester Devices (Child Org)
+  // 2 Active
+  for (let i = 1; i <= 2; i++) {
+    const expiryDate = new Date(today)
+    expiryDate.setDate(today.getDate() + 200)
+    await prisma.device.create({
+      data: {
+        name: `Manchester Screen ${i}`,
+        location: 'Manchester Outlet',
+        serialNumber: `MAN-ACT-${i}`,
+        status: LicenseStatus.ACTIVE,
+        expiryDate: expiryDate,
+        latitude: 53.4808 + (Math.random() * 0.01 - 0.005),
+        longitude: -2.2426 + (Math.random() * 0.01 - 0.005),
+        organizationId: manchester.id,
       },
     })
   }

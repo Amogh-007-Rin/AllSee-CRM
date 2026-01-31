@@ -106,6 +106,11 @@ export const issueGraceToken = async (req: AuthRequest, res: Response) => {
     const org = await prisma.organization.findFirst({ where: { id: device.organizationId, parentId: orgId } });
     if (!org && device.organizationId !== orgId) return res.status(403).json({ message: 'You do not manage this device.' });
 
+    // BUG FIX: Only allow grace token for EXPIRED devices
+    if (device.status !== LicenseStatus.EXPIRED) {
+      return res.status(400).json({ message: 'Grace period can only be issued to EXPIRED devices.' });
+    }
+
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 7);
 

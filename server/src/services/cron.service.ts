@@ -59,6 +59,7 @@ export const checkLicenseStatuses = async () => {
 
     const graceIssued = await prisma.device.updateMany({
       where: {
+        status: LicenseStatus.EXPIRED, // Only target EXPIRED devices (not SUSPENDED)
         expiryDate: {
           lte: today
         },
