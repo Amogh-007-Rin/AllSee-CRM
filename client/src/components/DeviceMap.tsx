@@ -1,5 +1,5 @@
-import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import React, { useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -22,6 +22,7 @@ interface Device {
 
 interface DeviceMapProps {
   devices: Device[];
+  searchLocation?: string;
 }
 
 const getIcon = (status: string) => {
@@ -42,12 +43,72 @@ const getIcon = (status: string) => {
   });
 };
 
-const DeviceMap: React.FC<DeviceMapProps> = ({ devices }) => {
+const MapController: React.FC<{ center?: [number, number] }> = ({ center }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (center) {
+      map.flyTo(center, 12); // Zoom level 12 for city view
+    }
+  }, [center, map]);
+  return null;
+};
+
+const DeviceMap: React.FC<DeviceMapProps> = ({ devices, searchLocation }) => {
   // Default center (UK)
   const defaultCenter: [number, number] = [52.3555, -1.1743];
+  const [mapCenter, setMapCenter] = React.useState<[number, number] | undefined>(undefined);
   
   // Filter devices that have coordinates
   const validDevices = devices.filter(d => d.latitude && d.longitude);
+
+  useEffect(() => {
+    const fetchCoordinates = async () => {
+      if (!searchLocation) {
+        setMapCenter(undefined);
+        return;
+      }
+
+      // 1. Try to find a matching device first (Priority 1)
+      const matchedDevice = validDevices.find(d => 
+        d.location.toLowerCase().includes(searchLocation.toLowerCase()) || 
+        d.name.toLowerCase().includes(searchLocation.toLowerCase())
+      );
+
+      if (matchedDevice && matchedDevice.latitude && matchedDevice.longitude) {
+        const lat = matchedDevice.latitude;
+        const lon = matchedDevice.longitude;
+        setMapCenter(prev => {
+          if (prev && prev[0] === lat && prev[1] === lon) return prev;
+          return [lat, lon];
+        });
+        return;
+      }
+
+      // 2. If no device match, try global geocoding (Priority 2)
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchLocation)}`);
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+          const { lat, lon } = data[0];
+          const newLat = parseFloat(lat);
+          const newLon = parseFloat(lon);
+          setMapCenter(prev => {
+            if (prev && prev[0] === newLat && prev[1] === newLon) return prev;
+            return [newLat, newLon];
+          });
+        }
+      } catch (error) {
+        console.error("Geocoding failed", error);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      fetchCoordinates();
+    }, 500); // Debounce to avoid spamming the API
+
+    return () => clearTimeout(timeoutId);
+  }, [searchLocation, validDevices]);
 
   const tileLayerUrl = import.meta.env.VITE_MAP_TILE_LAYER_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
@@ -58,6 +119,7 @@ const DeviceMap: React.FC<DeviceMapProps> = ({ devices }) => {
         zoom={6} 
         style={{ height: '100%', width: '100%' }}
       >
+        <MapController center={mapCenter} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url={tileLayerUrl}

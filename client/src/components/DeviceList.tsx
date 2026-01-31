@@ -27,6 +27,8 @@ const DeviceList: React.FC = () => {
   const { user } = useAuth();
   const [selected, setSelected] = useState<string[]>([]);
 
+  const [locationSearch, setLocationSearch] = useState('');
+
   useEffect(() => {
     fetchDevices();
   }, []);
@@ -142,6 +144,19 @@ const DeviceList: React.FC = () => {
               className="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500 w-64"
             />
           </div>
+          <div className="relative">
+            <MapIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+            <input
+              type="text"
+              placeholder="Search screen by location..."
+              value={locationSearch}
+              onChange={(e) => {
+                setLocationSearch(e.target.value);
+                if (e.target.value) setViewMode('map');
+              }}
+              className="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500 w-64"
+            />
+          </div>
         </div>
       </div>
 
@@ -154,7 +169,7 @@ const DeviceList: React.FC = () => {
       )}
 
       {viewMode === 'map' ? (
-        <DeviceMap devices={filteredDevices} />
+        <DeviceMap devices={filteredDevices} searchLocation={locationSearch} />
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
