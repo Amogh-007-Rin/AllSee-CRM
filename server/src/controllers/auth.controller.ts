@@ -69,6 +69,7 @@ export const me = async (req: AuthRequest, res: Response) => {
       orgId: user.organizationId,
       orgType: user.organization.type,
       billingMode: user.organization.billingMode,
+      organizationName: user.organization.name,
     });
   } catch (error) {
     console.error('Me error:', error);

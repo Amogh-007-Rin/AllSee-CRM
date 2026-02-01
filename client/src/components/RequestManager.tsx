@@ -38,9 +38,9 @@ const RequestManager: React.FC = () => {
 
   const fetchRequests = async () => {
     try {
-      // If user is a reseller, we might want to fetch requests assigned to them specifically
-      // But assuming /requests endpoint handles role-based filtering on backend
-      const response = await api.get('/requests');
+      // Use role-based endpoint selection
+      const endpoint = user?.orgType === 'RESELLER' ? '/requests/reseller' : '/requests';
+      const response = await api.get(endpoint);
       setRequests(response.data);
     } catch (error) {
       console.error('Failed to fetch requests', error);
@@ -167,8 +167,8 @@ const RequestManager: React.FC = () => {
         </div>
         
         <div className="flex gap-3">
-             {/* Proactive Quote Generation for Resellers/Parents */}
-             {(user?.orgType === 'PARENT' || user?.billingMode === 'RESELLER_ONLY') && (
+             {/* Proactive Quote Generation for Resellers */}
+             {user?.orgType === 'RESELLER' && (
                 <button
                     onClick={() => {
                         setPrefillData(null);

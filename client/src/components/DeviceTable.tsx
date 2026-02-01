@@ -190,7 +190,7 @@ const DeviceTable: React.FC<DeviceTableProps> = ({
                     </div>
                 </td>
                 <td className="px-8 py-5 whitespace-nowrap text-right text-sm font-medium">
-                    {(device.status === 'EXPIRING_SOON') && (
+                    {(device.status === 'EXPIRING_SOON' || device.status === 'ACTIVE') && (
                          device.activeRenewalRequest ? (
                             <span className="text-slate-500 italic text-xs">Processing...</span>
                          ) : (
@@ -269,7 +269,7 @@ const DeviceTable: React.FC<DeviceTableProps> = ({
 
                 <div className="flex justify-between items-center pt-4 border-t border-slate-800/50">
                     <span className="text-xs text-slate-500">{device.organization.name}</span>
-                    {(device.status === 'EXPIRING_SOON') && !device.activeRenewalRequest && (
+                    {(device.status === 'EXPIRING_SOON' || device.status === 'ACTIVE') && !device.activeRenewalRequest && (
                         <button
                             onClick={() => onRenew(device)}
                             className="text-sm text-blue-400 hover:text-blue-300 font-medium flex items-center"

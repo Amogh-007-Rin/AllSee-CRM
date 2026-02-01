@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Search, Map as MapIcon, List, X } from 'lucide-react';
@@ -22,6 +23,7 @@ interface Device {
 }
 
 const DeviceList: React.FC<{ clientId?: string }> = ({ clientId }) => {
+  const navigate = useNavigate();
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -58,16 +60,9 @@ const DeviceList: React.FC<{ clientId?: string }> = ({ clientId }) => {
       if (user.billingMode === 'RESELLER_ONLY' && user.orgType === 'PARENT') {
         handleRequestQuote([device.id]);
       } else {
-        const years = Number(window.prompt(`Renew ${device.name} for how many years?`, '1')) || 1;
-        api.post('/devices/bulk-renew', { deviceIds: [device.id], years })
-           .then(() => {
-             alert('Device renewed successfully');
-             fetchDevices();
-           })
-           .catch((err) => {
-             console.error('Renew failed', err);
-             alert('Renew failed');
-           });
+        // Direct renewal now goes to checkout
+        
+        navigate('/checkout', { state: { devices: [device] } });
       }
     }
   };
@@ -80,16 +75,10 @@ const DeviceList: React.FC<{ clientId?: string }> = ({ clientId }) => {
       return;
     }
 
-    const years = Number(window.prompt(`Renew ${selected.length} devices for how many years?`, '1')) || 1;
-    try {
-      await api.post('/devices/bulk-renew', { deviceIds: selected, years });
-      alert('Bulk renewal successful');
-      fetchDevices();
-      setSelected([]);
-    } catch (error) {
-      console.error('Bulk renew failed', error);
-      alert('Bulk renew failed');
-    }
+    // Get full device objects for the selected IDs
+    const selectedDevices = devices.filter(d => selected.includes(d.id));
+    const navigate = useNavigate();
+    navigate('/checkout', { state: { devices: selectedDevices } });
   };
 
   const handleIssueGrace = async (id?: string) => {

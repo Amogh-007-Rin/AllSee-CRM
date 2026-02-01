@@ -8,6 +8,7 @@ interface User {
   billingMode?: string;
   email: string;
   name: string;
+  organizationName?: string;
 }
 
 interface AuthContextType {
