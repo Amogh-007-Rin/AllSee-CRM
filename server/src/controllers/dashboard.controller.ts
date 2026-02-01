@@ -23,6 +23,24 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       deviceWhereInput = {
         organizationId: { in: allOrgIds }
       };
+    } else if (orgType === OrgType.RESELLER) {
+      // Reseller: Get all devices from Client Orgs AND their children
+      const clients = await prisma.organization.findMany({
+        where: { resellerId: orgId },
+        select: { id: true }
+      });
+      const clientIds = clients.map(c => c.id);
+
+      const childOrgs = await prisma.organization.findMany({
+        where: { parentId: { in: clientIds } },
+        select: { id: true }
+      });
+
+      const allManagedOrgIds = [...clientIds, ...childOrgs.map(c => c.id)];
+      
+      deviceWhereInput = {
+        organizationId: { in: allManagedOrgIds }
+      };
     } else {
       // Child: Get only own devices
       deviceWhereInput = {
@@ -98,7 +116,51 @@ export const getDevices = async (req: AuthRequest, res: Response) => {
     const { orgId, orgType } = req.user!;
     let deviceWhereInput = {};
 
-    if (orgType === OrgType.PARENT) {
+    if (orgType === OrgType.RESELLER) {
+      // Allow reseller to filter by specific client if requested, or see all
+      // For now, let's just give them everything or if they passed ?clientId=...
+      const clientId = req.query.clientId as string;
+      
+      if (clientId) {
+        // Verify this client belongs to reseller
+        const client = await prisma.organization.findFirst({
+          where: { id: clientId, resellerId: orgId }
+        });
+        
+        if (client) {
+           // Get client and its children
+           const children = await prisma.organization.findMany({
+             where: { parentId: clientId },
+             select: { id: true }
+           });
+           deviceWhereInput = {
+             organizationId: { in: [clientId, ...children.map(c => c.id)] }
+           };
+        } else {
+           // Invalid client access
+           return res.json([]); 
+        }
+      } else {
+        // Show all managed devices
+        const clients = await prisma.organization.findMany({
+            where: { resellerId: orgId },
+            select: { id: true }
+        });
+        const clientIds = clients.map(c => c.id);
+
+        const childOrgs = await prisma.organization.findMany({
+            where: { parentId: { in: clientIds } },
+            select: { id: true }
+        });
+
+        const allManagedOrgIds = [...clientIds, ...childOrgs.map(c => c.id)];
+        
+        deviceWhereInput = {
+            organizationId: { in: allManagedOrgIds }
+        };
+      }
+    } else if (orgType === OrgType.PARENT) {
+      // ... existing parent logic ...
       const childOrgs = await prisma.organization.findMany({
         where: { parentId: orgId },
         select: { id: true },
@@ -138,7 +200,51 @@ export const getDevices = async (req: AuthRequest, res: Response) => {
 
     res.json(devicesWithFlag);
   } catch (error) {
-    console.error('Get devices error:', error);
+    console.error('Fetch devices error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const getResellerClients = async (req: AuthRequest, res: Response) => {
+  try {
+    const { orgId, orgType } = req.user!;
+
+    if (orgType !== OrgType.RESELLER) {
+      return res.status(403).json({ message: 'Only Resellers can access this.' });
+    }
+
+    const clients = await prisma.organization.findMany({
+      where: { resellerId: orgId },
+      include: {
+        children: { select: { id: true } }
+      }
+    });
+
+    const clientStats = await Promise.all(clients.map(async (client) => {
+      // Get all org IDs related to this client (client itself + its children)
+      const allOrgIds = [client.id, ...client.children.map(c => c.id)];
+
+      const [totalScreens, atRisk] = await Promise.all([
+        prisma.device.count({ where: { organizationId: { in: allOrgIds } } }),
+        prisma.device.count({
+          where: {
+            organizationId: { in: allOrgIds },
+            status: { in: [LicenseStatus.EXPIRING_SOON, LicenseStatus.EXPIRED] }
+          }
+        })
+      ]);
+
+      return {
+        id: client.id,
+        name: client.name,
+        totalScreens,
+        atRisk
+      };
+    }));
+
+    res.json(clientStats);
+  } catch (error) {
+    console.error('Get reseller clients error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

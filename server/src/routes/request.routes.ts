@@ -1,14 +1,23 @@
 
 import { Router } from 'express';
-import { createRequest, getRequests, approveRequest, rejectRequest } from '../controllers/request.controller.js';
+import { createRequest, getRequests, approveRequest, rejectRequest, getResellerRequests, respondToRequest, getQuotePdf } from '../controllers/request.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
-// Child: Create a renewal request
+// Child/Client: Create a renewal request
 router.post('/', authenticateToken, createRequest);
 
-// Parent: View all requests
+// Reseller: View requests from managed clients
+router.get('/reseller', authenticateToken, getResellerRequests);
+
+// Reseller: Respond to request (Send Quote)
+router.post('/:id/respond', authenticateToken, respondToRequest);
+
+// Parent/Child: Download Quote PDF
+router.get('/:id/quote', authenticateToken, getQuotePdf);
+
+// Parent: View all requests from children
 router.get('/', authenticateToken, getRequests);
 
 // Parent: Approve & Pay (Renew)

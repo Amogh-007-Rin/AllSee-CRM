@@ -28,12 +28,32 @@ async function main() {
     },
   })
 
-  // Create Reseller Managed Parent Org
+  // 1a. Create Reseller Partner Org (The "Big Boss" Reseller)
+  const partnerOrg = await prisma.organization.create({
+    data: {
+      name: 'Global Signs Partners Ltd',
+      type: OrgType.RESELLER,
+      billingMode: 'END_USER_CAN_PAY', // Resellers pay normally
+    },
+  })
+
+  // Create Reseller Managed Parent Org (TechGiant)
   const resellerOrg = await prisma.organization.create({
     data: {
       name: 'TechGiant Corp (Reseller Managed)',
       type: OrgType.PARENT,
       billingMode: 'RESELLER_ONLY',
+      resellerId: partnerOrg.id, // Link to Partner
+    },
+  })
+
+  // Create Another Reseller Managed Client (Hotel Group)
+  const hotelOrg = await prisma.organization.create({
+    data: {
+      name: 'Hotel Group Int (Reseller Managed)',
+      type: OrgType.PARENT,
+      billingMode: 'RESELLER_ONLY',
+      resellerId: partnerOrg.id, // Link to Partner
     },
   })
 
@@ -73,6 +93,28 @@ async function main() {
     },
   })
 
+  // Create Reseller Partner User
+  await prisma.user.create({
+    data: {
+      email: 'partner@globalsigns.com',
+      password: 'password123',
+      name: 'Global Partner Admin',
+      role: UserRole.ADMIN,
+      organizationId: partnerOrg.id,
+    },
+  })
+
+  // Create Hotel Group User
+  await prisma.user.create({
+    data: {
+      email: 'admin@hotelgroup.com',
+      password: 'password123',
+      name: 'Hotel Group Admin',
+      role: UserRole.ADMIN,
+      organizationId: hotelOrg.id,
+    },
+  })
+
   const today = new Date()
 
   for (const city of ukCities) {
@@ -101,7 +143,7 @@ async function main() {
     // 1. ACTIVE (Expiry: Today + 120 days)
     for (let i = 1; i <= 2; i++) {
       const expiryDate = new Date(today)
-      expiryDate.setDate(today.getDate() + 120 + Math.floor(Math.random() * 60))
+      expiryDate.setDate(today.getDate() + 120)
       await prisma.device.create({
         data: {
           name: `${city.name} Active Screen ${i}`,
@@ -209,6 +251,36 @@ async function main() {
         },
       })
       rDevCount++
+    }
+  }
+
+  // Create Hotel Group Devices
+  let hDevCount = 1
+  for (const group of resellerDevices) {
+    for (let i = 0; i < group.count; i++) {
+      const expiryDate = new Date(today)
+      expiryDate.setDate(today.getDate() + group.offset)
+      
+      let graceDate = null
+      if (group.status === LicenseStatus.EXPIRED) {
+        graceDate = new Date(today)
+        graceDate.setDate(today.getDate() + 7)
+      }
+
+      await prisma.device.create({
+        data: {
+          name: `Hotel Screen ${hDevCount}`,
+          location: 'Hotel Lobby',
+          serialNumber: `HOTEL-DEV-${hDevCount}`,
+          status: group.status,
+          expiryDate: expiryDate,
+          graceTokenExpiry: graceDate,
+          latitude: 48.8566, // Paris default
+          longitude: 2.3522,
+          organizationId: hotelOrg.id,
+        },
+      })
+      hDevCount++
     }
   }
 

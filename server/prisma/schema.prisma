@@ -21,6 +21,11 @@ model Organization {
   parent        Organization?  @relation("OrgHierarchy", fields: [parentId], references: [id])
   children      Organization[] @relation("OrgHierarchy")
 
+  // Reseller Logic
+  resellerId    String?
+  reseller      Organization?  @relation("ResellerClients", fields: [resellerId], references: [id])
+  clients       Organization[] @relation("ResellerClients") // Inverse relation
+
   // Relations
   devices       Device[]
   users         User[]
@@ -74,12 +79,18 @@ model RenewalRequest {
   // Optional: Link to specific devices if partial renewal
   deviceIds      String[]
   notes          String?
+  
+  // Reseller Response
+  responseMessage String?
+  quotePdfData    String?  // Base64 encoded PDF
+  respondedAt     DateTime?
 }
 
 // Enums
 enum OrgType {
   PARENT
   CHILD
+  RESELLER
 }
 
 enum BillingMode {
@@ -101,6 +112,7 @@ enum LicenseStatus {
 
 enum RequestStatus {
   PENDING
+  QUOTED
   APPROVED
   REJECTED
 }

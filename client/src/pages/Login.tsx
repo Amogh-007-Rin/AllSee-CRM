@@ -7,17 +7,19 @@ import { Lock, Mail } from 'lucide-react';
 const Login: React.FC = () => {
   const [email, setEmail] = useState('admin@hq.com');
   const [password, setPassword] = useState('password123');
-  const [scenario, setScenario] = useState<'direct' | 'reseller'>('direct');
+  const [scenario, setScenario] = useState<'direct' | 'reseller' | 'partner'>('direct');
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleScenarioChange = (newScenario: 'direct' | 'reseller') => {
+  const handleScenarioChange = (newScenario: 'direct' | 'reseller' | 'partner') => {
     setScenario(newScenario);
     if (newScenario === 'direct') {
       setEmail('admin@hq.com');
-    } else {
+    } else if (newScenario === 'reseller') {
       setEmail('reseller_client@demo.com');
+    } else {
+      setEmail('partner@globalsigns.com');
     }
     setPassword('password123');
   };
@@ -64,6 +66,17 @@ const Login: React.FC = () => {
                 className="text-blue-600 focus:ring-blue-500"
               />
               <span className="text-sm text-gray-700">Verified Reseller Client</span>
+            </label>
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="radio"
+                name="scenario"
+                value="partner"
+                checked={scenario === 'partner'}
+                onChange={() => handleScenarioChange('partner')}
+                className="text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">Reseller Partner</span>
             </label>
           </div>
         </div>

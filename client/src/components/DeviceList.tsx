@@ -20,7 +20,7 @@ interface Device {
   activeRenewalRequest?: boolean;
 }
 
-const DeviceList: React.FC = () => {
+const DeviceList: React.FC<{ clientId?: string }> = ({ clientId }) => {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,11 +32,12 @@ const DeviceList: React.FC = () => {
 
   useEffect(() => {
     fetchDevices();
-  }, []);
+  }, [clientId]);
 
   const fetchDevices = async () => {
     try {
-      const response = await api.get('/dashboard/devices');
+      const url = clientId ? `/dashboard/devices?clientId=${clientId}` : '/dashboard/devices';
+      const response = await api.get(url);
       setDevices(response.data);
     } catch (error) {
       console.error('Failed to fetch devices', error);
@@ -54,8 +55,8 @@ const DeviceList: React.FC = () => {
   const handleMapRenew = (device: Device) => {
     if (user?.orgType === 'CHILD') {
       handleRequestRenewal(device.id, device.name);
-    } else if (user?.orgType === 'PARENT') {
-      if (user.billingMode === 'RESELLER_ONLY') {
+    } else if (user?.orgType === 'PARENT' || user?.orgType === 'RESELLER') {
+      if (user.billingMode === 'RESELLER_ONLY' && user.orgType === 'PARENT') {
         handleRequestQuote([device.id]);
       } else {
         const years = Number(window.prompt(`Renew ${device.name} for how many years?`, '1')) || 1;
@@ -78,6 +79,12 @@ const DeviceList: React.FC = () => {
 
   const handleBulkRenew = async () => {
     if (selected.length === 0) { alert('Select devices first'); return; }
+
+    if (user?.orgType === 'PARENT' && user?.billingMode === 'RESELLER_ONLY') {
+      handleRequestQuote(selected);
+      return;
+    }
+
     const years = Number(window.prompt('Renew for how many years?', '1')) || 1;
     try {
       await api.post('/devices/bulk-renew', { deviceIds: selected, years });
@@ -326,43 +333,47 @@ const DeviceList: React.FC = () => {
                       {new Date(device.expiryDate).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {user?.orgType === 'CHILD' && (device.status === 'EXPIRING_SOON' || device.status === 'EXPIRED') && (
-                        device.activeRenewalRequest ? (
-                          <div className="group relative inline-block">
-                            <button 
-                              disabled
-                              className="text-gray-400 cursor-not-allowed"
-                            >
-                              Renewal Requested
-                            </button>
-                            <div className="invisible group-hover:visible absolute z-50 w-64 p-2 mt-2 text-xs text-white bg-gray-800 rounded-lg shadow-lg -left-56 top-full whitespace-normal">
-                              Renewal requested has be raised to the head quatres and waiting for approval to request again wait for 6 hours.
+                      {(device.status === 'EXPIRING_SOON' || device.status === 'EXPIRED') && (
+                        <div className="flex flex-col items-end space-y-1">
+                          {device.activeRenewalRequest ? (
+                            <div className="group relative inline-block">
+                              <button 
+                                disabled
+                                className="text-gray-400 cursor-not-allowed"
+                              >
+                                Renewal Requested
+                              </button>
+                              <div className="invisible group-hover:visible absolute z-50 w-64 p-2 mt-2 text-xs text-white bg-gray-800 rounded-lg shadow-lg -left-56 top-full whitespace-normal">
+                                Renewal requested has be raised to the head quatres and waiting for approval to request again wait for 6 hours.
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <button 
-                            onClick={() => handleRequestRenewal(device.id, device.name)}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            Renew
-                          </button>
-                        )
-                      )}
-                      {user?.orgType === 'PARENT' && device.status === 'EXPIRED' && (
-                        device.graceTokenExpiry && new Date(device.graceTokenExpiry) > new Date() ? (
-                          <span className="text-purple-600 font-medium text-xs">
-                            On Grace Period
-                          </span>
-                        ) : (
-                          user.billingMode !== 'RESELLER_ONLY' && (
+                          ) : (
                             <button 
-                              onClick={() => handleIssueGrace(device.id)}
-                              className="text-orange-600 hover:text-orange-900"
+                              onClick={() => handleMapRenew(device)}
+                              className="text-blue-600 hover:text-blue-900"
                             >
-                              Grace
+                              {user?.orgType === 'CHILD' ? 'Request Renewal' : 
+                               user?.billingMode === 'RESELLER_ONLY' ? 'Request Quote' : 'Renew'}
                             </button>
-                          )
-                        )
+                          )}
+                          
+                          {user?.orgType === 'PARENT' && device.status === 'EXPIRED' && (
+                            device.graceTokenExpiry && new Date(device.graceTokenExpiry) > new Date() ? (
+                              <span className="text-purple-600 font-medium text-xs">
+                                On Grace Period
+                              </span>
+                            ) : (
+                              user.billingMode !== 'RESELLER_ONLY' && (
+                                <button 
+                                  onClick={() => handleIssueGrace(device.id)}
+                                  className="text-orange-600 hover:text-orange-900"
+                                >
+                                  Grace
+                                </button>
+                              )
+                            )
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>

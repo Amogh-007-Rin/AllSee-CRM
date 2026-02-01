@@ -3,14 +3,14 @@ import { prisma } from '../lib/prisma.js';
 import { AuthRequest } from '../middleware/auth.middleware.js';
 import { OrgType, LicenseStatus } from '@prisma/client';
 
-// Parent only - Bulk renew selected devices by number of years (default 1)
+// Parent or Reseller - Bulk renew selected devices by number of years (default 1)
 export const bulkRenew = async (req: AuthRequest, res: Response) => {
   try {
     const { orgId, orgType } = req.user!;
     const { deviceIds, years = 1 } = req.body;
 
-    if (orgType !== OrgType.PARENT) {
-      return res.status(403).json({ message: 'Only Parent Organizations can perform bulk renew.' });
+    if (orgType !== OrgType.PARENT && orgType !== OrgType.RESELLER) {
+      return res.status(403).json({ message: 'Permission denied.' });
     }
 
     if (!Array.isArray(deviceIds) || deviceIds.length === 0) {
@@ -20,13 +20,25 @@ export const bulkRenew = async (req: AuthRequest, res: Response) => {
     const updated: any[] = [];
 
     await prisma.$transaction(async (tx) => {
-        for (const rawId of deviceIds) {
+      // Pre-fetch valid org IDs for security check
+      let validOrgIds: string[] = [];
+      if (orgType === OrgType.PARENT) {
+         const childOrgs = await tx.organization.findMany({ where: { parentId: orgId }, select: { id: true } });
+         validOrgIds = [orgId, ...childOrgs.map(o => o.id)];
+      } else if (orgType === OrgType.RESELLER) {
+         const clients = await tx.organization.findMany({ where: { resellerId: orgId }, select: { id: true } });
+         const clientIds = clients.map(c => c.id);
+         const children = await tx.organization.findMany({ where: { parentId: { in: clientIds } }, select: { id: true } });
+         validOrgIds = [...clientIds, ...children.map(c => c.id)];
+      }
+
+      for (const rawId of deviceIds) {
         const id = String(rawId);
         const device = await tx.device.findUnique({ where: { id } });
         if (!device) continue;
-        // Ensure device belongs to one of parent's orgs
-        const org = await tx.organization.findFirst({ where: { id: device.organizationId, parentId: orgId } });
-        if (!org && device.organizationId !== orgId) continue;
+        
+        // Security Check
+        if (!validOrgIds.includes(device.organizationId)) continue;
 
         const expiry = new Date(device.expiryDate);
         expiry.setFullYear(expiry.getFullYear() + Number(years));

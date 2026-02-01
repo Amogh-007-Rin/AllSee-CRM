@@ -6,6 +6,7 @@ import { CheckCircle, AlertTriangle, XCircle, Ban, X } from 'lucide-react';
 import { Routes, Route } from 'react-router-dom';
 import DeviceList from '../components/DeviceList';
 import RequestManager from '../components/RequestManager';
+import ResellerDashboard from './ResellerDashboard';
 import { useAuth } from '../context/AuthContext';
 
 const RiskBanner: React.FC = () => {
@@ -112,6 +113,16 @@ const DashboardHome: React.FC = () => {
 };
 
 const Dashboard: React.FC = () => {
+  const { user } = useAuth();
+
+  if (user?.orgType === 'RESELLER') {
+    return (
+      <Layout>
+        <ResellerDashboard />
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <RiskBanner />

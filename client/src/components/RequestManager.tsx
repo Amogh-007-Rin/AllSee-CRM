@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Check, X, Plus } from 'lucide-react';
+import { Check, X, Plus, Download } from 'lucide-react';
 
 interface RenewalRequest {
   id: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'QUOTED';
   createdAt: string;
   notes: string;
+  responseMessage?: string;
+  quotePdfData?: string;
   requesterOrg: {
     name: string;
     type: string;
@@ -69,11 +71,29 @@ const RequestManager: React.FC = () => {
     }
   };
 
+  const downloadQuote = async (id: string) => {
+    try {
+      const response = await api.get(`/requests/${id}/quote`);
+      const { pdfData } = response.data;
+      
+      const link = document.createElement('a');
+      link.href = pdfData;
+      link.download = `quote-${id.slice(0, 8)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Download quote error:', error);
+      alert('Failed to download quote.');
+    }
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Renewal Requests</h2>
-        {user?.orgType === 'CHILD' && (
+        {/* Child can create requests. Parent can create requests if they are Reseller Managed (which is checked in backend) */}
+        {(user?.orgType === 'CHILD' || (user?.orgType === 'PARENT' && user?.billingMode === 'RESELLER_ONLY')) && (
           <button
             onClick={() => setShowNewRequestForm(true)}
             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -128,9 +148,7 @@ const RequestManager: React.FC = () => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requester</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              {user?.orgType === 'PARENT' && (
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              )}
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -153,33 +171,49 @@ const RequestManager: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                       ${request.status === 'APPROVED' ? 'bg-green-100 text-green-800' : 
-                        request.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                        request.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 
+                        request.status === 'QUOTED' ? 'bg-blue-100 text-blue-800' :
+                        'bg-yellow-100 text-yellow-800'}`}>
                       {request.status}
                     </span>
                   </td>
-                  {user?.orgType === 'PARENT' && request.status === 'PENDING' && (
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    {/* Parent Approval Actions (for Child Requests) */}
+                    {user?.orgType === 'PARENT' && request.requesterOrg.type === 'CHILD' && request.status === 'PENDING' && (
+                      <>
+                        <button
+                          onClick={() => handleApprove(request.id)}
+                          className="text-green-600 hover:text-green-900 mr-4"
+                          title="Approve"
+                        >
+                          <Check className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={() => handleReject(request.id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Reject"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </>
+                    )}
+                    
+                    {/* Quote Download Action (for Parent/Child viewing their own request) */}
+                    {request.status === 'QUOTED' && (
                       <button
-                        onClick={() => handleApprove(request.id)}
-                        className="text-green-600 hover:text-green-900 mr-4"
-                        title="Approve"
+                        onClick={() => downloadQuote(request.id)}
+                        className="text-indigo-600 hover:text-indigo-900 flex items-center justify-end w-full"
+                        title="Download Quote"
                       >
-                        <Check className="h-5 w-5" />
+                        <Download className="h-4 w-4 mr-1" /> PDF
                       </button>
-                      <button
-                        onClick={() => handleReject(request.id)}
-                        className="text-red-600 hover:text-red-900"
-                        title="Reject"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
-                    </td>
-                  )}
-                  {user?.orgType === 'PARENT' && request.status !== 'PENDING' && (
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-400">
-                      -
-                    </td>
-                  )}
+                    )}
+
+                    {/* Placeholder for no actions */}
+                    {request.status !== 'QUOTED' && !(user?.orgType === 'PARENT' && request.requesterOrg.type === 'CHILD' && request.status === 'PENDING') && (
+                       <span className="text-gray-400">-</span>
+                    )}
+                  </td>
                 </tr>
               ))
             )}
