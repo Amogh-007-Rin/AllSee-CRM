@@ -51,6 +51,27 @@ const DeviceList: React.FC = () => {
     d.organization.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleMapRenew = (device: Device) => {
+    if (user?.orgType === 'CHILD') {
+      handleRequestRenewal(device.id, device.name);
+    } else if (user?.orgType === 'PARENT') {
+      if (user.billingMode === 'RESELLER_ONLY') {
+        handleRequestQuote([device.id]);
+      } else {
+        const years = Number(window.prompt(`Renew ${device.name} for how many years?`, '1')) || 1;
+        api.post('/devices/bulk-renew', { deviceIds: [device.id], years })
+           .then(() => {
+             alert('Device renewed successfully');
+             fetchDevices();
+           })
+           .catch((err) => {
+             console.error('Renew failed', err);
+             alert('Renew failed');
+           });
+      }
+    }
+  };
+
   const toggleSelect = (id: string) => {
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
@@ -105,6 +126,11 @@ const DeviceList: React.FC = () => {
   const [renewalModalOpen, setRenewalModalOpen] = useState(false);
   const [targetRenewal, setTargetRenewal] = useState<{id: string, name: string} | null>(null);
 
+  // Quote Request State
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
+  const [quoteNotes, setQuoteNotes] = useState('');
+  const [targetQuoteDevices, setTargetQuoteDevices] = useState<string[]>([]);
+
   const getTooltipText = (device: Device) => {
     if (device.status === 'EXPIRING_SOON') {
         return `Warning: If not renewed by ${new Date(device.expiryDate).toLocaleDateString()}, this screen will stop displaying content.`;
@@ -123,6 +149,29 @@ const DeviceList: React.FC = () => {
   const handleRequestRenewal = (id: string, name: string) => {
     setTargetRenewal({ id, name });
     setRenewalModalOpen(true);
+  };
+
+  const handleRequestQuote = (deviceIds: string[]) => {
+    setTargetQuoteDevices(deviceIds);
+    setQuoteModalOpen(true);
+  };
+
+  const confirmQuoteRequest = async () => {
+    try {
+      await api.post('/requests', { 
+        notes: `Quote Request: ${quoteNotes}`, 
+        deviceIds: targetQuoteDevices,
+        type: 'QUOTE' 
+      });
+      alert('Quote Request sent to Account Manager.');
+      setQuoteModalOpen(false);
+      setQuoteNotes('');
+      setTargetQuoteDevices([]);
+      fetchDevices();
+    } catch (error) {
+      console.error('Quote Request failed', error);
+      alert('Quote Request failed');
+    }
   };
 
   const confirmRenewalRequest = async () => {
@@ -188,14 +237,31 @@ const DeviceList: React.FC = () => {
 
       {user?.orgType === 'PARENT' && viewMode === 'list' && (
         <div className="mb-4 space-x-2">
-          <button onClick={handleBulkRenew} className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Bulk Renew</button>
-          <button onClick={handleCoTerm} className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700">Co-Term</button>
+          {user.billingMode === 'RESELLER_ONLY' ? (
+            <button
+              onClick={() => handleRequestQuote(selected)}
+              disabled={selected.length === 0}
+              className={`px-3 py-1 text-white rounded text-sm ${selected.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+            >
+              Request Quote ({selected.length})
+            </button>
+          ) : (
+            <>
+              <button onClick={handleBulkRenew} className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Bulk Renew</button>
+              <button onClick={handleCoTerm} className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700">Co-Term</button>
+            </>
+          )}
           <button onClick={() => handleIssueGrace()} className="px-3 py-1 bg-orange-500 text-white rounded text-sm hover:bg-orange-600">Issue Grace</button>
         </div>
       )}
 
       {viewMode === 'map' ? (
-        <DeviceMap devices={filteredDevices} searchLocation={locationSearch} />
+        <DeviceMap 
+          devices={filteredDevices} 
+          searchLocation={locationSearch} 
+          user={user}
+          onRenew={handleMapRenew}
+        />
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
@@ -283,12 +349,20 @@ const DeviceList: React.FC = () => {
                         )
                       )}
                       {user?.orgType === 'PARENT' && device.status === 'EXPIRED' && (
-                        <button 
-                          onClick={() => handleIssueGrace(device.id)}
-                          className="text-orange-600 hover:text-orange-900"
-                        >
-                          Grace
-                        </button>
+                        device.graceTokenExpiry && new Date(device.graceTokenExpiry) > new Date() ? (
+                          <span className="text-purple-600 font-medium text-xs">
+                            On Grace Period
+                          </span>
+                        ) : (
+                          user.billingMode !== 'RESELLER_ONLY' && (
+                            <button 
+                              onClick={() => handleIssueGrace(device.id)}
+                              className="text-orange-600 hover:text-orange-900"
+                            >
+                              Grace
+                            </button>
+                          )
+                        )
                       )}
                     </td>
                   </tr>
@@ -299,6 +373,48 @@ const DeviceList: React.FC = () => {
         </div>
       )}
       
+      {quoteModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg w-full max-w-md shadow-xl">
+            <div className="flex justify-between items-start mb-4">
+               <h3 className="text-lg font-bold text-gray-900">Contact Reseller for Renewal</h3>
+               <button onClick={() => setQuoteModalOpen(false)} className="text-gray-400 hover:text-gray-500">
+                 <X className="h-5 w-5" />
+               </button>
+            </div>
+            <p className="text-gray-600 mb-4">
+              You are managed by a Verified Reseller. Please request a custom quote for these {targetQuoteDevices.length} screens.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label>
+              <textarea
+                value={quoteNotes}
+                onChange={(e) => setQuoteNotes(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="E.g., Need urgent renewal for London store..."
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setQuoteModalOpen(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmQuoteRequest}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+              >
+                Send Quote Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {renewalModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg w-full max-w-md shadow-xl">

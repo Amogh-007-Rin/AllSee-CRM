@@ -35,6 +35,7 @@ export const login = async (req: Request, res: Response) => {
         role: user.role,
         orgId: user.organizationId,
         orgType: user.organization.type,
+        billingMode: user.organization.billingMode,
       },
     });
   } catch (error) {
@@ -67,6 +68,7 @@ export const me = async (req: AuthRequest, res: Response) => {
       role: user.role,
       orgId: user.organizationId,
       orgType: user.organization.type,
+      billingMode: user.organization.billingMode,
     });
   } catch (error) {
     console.error('Me error:', error);

@@ -28,6 +28,15 @@ async function main() {
     },
   })
 
+  // Create Reseller Managed Parent Org
+  const resellerOrg = await prisma.organization.create({
+    data: {
+      name: 'TechGiant Corp (Reseller Managed)',
+      type: OrgType.PARENT,
+      billingMode: 'RESELLER_ONLY',
+    },
+  })
+
   // Define UK Cities with coordinates
   const ukCities = [
     { name: 'London Flagship', lat: 51.5074, lng: -0.1278, userEmail: 'london' },
@@ -50,6 +59,17 @@ async function main() {
       name: 'HQ Admin',
       role: UserRole.ADMIN,
       organizationId: hq.id,
+    },
+  })
+
+  // Create Reseller Client User
+  await prisma.user.create({
+    data: {
+      email: 'reseller_client@demo.com',
+      password: 'password123',
+      name: 'Reseller Client Admin',
+      role: UserRole.ADMIN,
+      organizationId: resellerOrg.id,
     },
   })
 
@@ -156,7 +176,43 @@ async function main() {
     }
   }
 
-  console.log('Seeding completed successfully')
+  // Create Reseller Devices (Mixed Status)
+  const resellerDevices = [
+    { status: LicenseStatus.ACTIVE, count: 2, offset: 120 },
+    { status: LicenseStatus.EXPIRING_SOON, count: 2, offset: 20 },
+    { status: LicenseStatus.EXPIRED, count: 1, offset: -10 },
+  ]
+
+  let rDevCount = 1
+  for (const group of resellerDevices) {
+    for (let i = 0; i < group.count; i++) {
+      const expiryDate = new Date(today)
+      expiryDate.setDate(today.getDate() + group.offset)
+      
+      let graceDate = null
+      if (group.status === LicenseStatus.EXPIRED) {
+        graceDate = new Date(today)
+        graceDate.setDate(today.getDate() + 7)
+      }
+
+      await prisma.device.create({
+        data: {
+          name: `Reseller Screen ${rDevCount}`,
+          location: 'Main Office',
+          serialNumber: `RESELLER-DEV-${rDevCount}`,
+          status: group.status,
+          expiryDate: expiryDate,
+          graceTokenExpiry: graceDate,
+          latitude: 51.5074, // London default
+          longitude: -0.1278,
+          organizationId: resellerOrg.id,
+        },
+      })
+      rDevCount++
+    }
+  }
+
+  console.log('Seeding finished.')
 }
 
 main()

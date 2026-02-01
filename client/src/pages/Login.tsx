@@ -5,11 +5,22 @@ import { useNavigate } from 'react-router-dom';
 import { Lock, Mail } from 'lucide-react';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@hq.com');
+  const [password, setPassword] = useState('password123');
+  const [scenario, setScenario] = useState<'direct' | 'reseller'>('direct');
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const handleScenarioChange = (newScenario: 'direct' | 'reseller') => {
+    setScenario(newScenario);
+    if (newScenario === 'direct') {
+      setEmail('admin@hq.com');
+    } else {
+      setEmail('reseller_client@demo.com');
+    }
+    setPassword('password123');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +38,36 @@ const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
         <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">Login to AllSee CRM</h2>
+        
+        {/* Scenario Switcher */}
+        <div className="mb-6 bg-gray-50 p-3 rounded-lg border border-gray-200">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Demo Scenario:</label>
+          <div className="flex space-x-4">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="radio"
+                name="scenario"
+                value="direct"
+                checked={scenario === 'direct'}
+                onChange={() => handleScenarioChange('direct')}
+                className="text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">Direct Customer</span>
+            </label>
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="radio"
+                name="scenario"
+                value="reseller"
+                checked={scenario === 'reseller'}
+                onChange={() => handleScenarioChange('reseller')}
+                className="text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">Verified Reseller Client</span>
+            </label>
+          </div>
+        </div>
+
         {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</div>}
         <form onSubmit={handleSubmit}>
           <div className="mb-4">

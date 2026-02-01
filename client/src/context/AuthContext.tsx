@@ -5,6 +5,7 @@ interface User {
   role: string;
   orgId: string;
   orgType: string;
+  billingMode?: string;
   email: string;
   name: string;
 }
