@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Search, Map as MapIcon, List, Info, X } from 'lucide-react';
+import { Search, Map as MapIcon, List, X } from 'lucide-react';
 import DeviceMap from './DeviceMap';
+import DeviceTable from './DeviceTable';
 
 interface Device {
   id: string;
@@ -27,8 +28,6 @@ const DeviceList: React.FC<{ clientId?: string }> = ({ clientId }) => {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const { user } = useAuth();
   const [selected, setSelected] = useState<string[]>([]);
-
-  const [locationSearch, setLocationSearch] = useState('');
 
   useEffect(() => {
     fetchDevices();
@@ -73,39 +72,23 @@ const DeviceList: React.FC<{ clientId?: string }> = ({ clientId }) => {
     }
   };
 
-  const toggleSelect = (id: string) => {
-    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
-
   const handleBulkRenew = async () => {
-    if (selected.length === 0) { alert('Select devices first'); return; }
-
-    if (user?.orgType === 'PARENT' && user?.billingMode === 'RESELLER_ONLY') {
+    if (selected.length === 0) return;
+    
+    if (user?.billingMode === 'RESELLER_ONLY') {
       handleRequestQuote(selected);
       return;
     }
 
-    const years = Number(window.prompt('Renew for how many years?', '1')) || 1;
+    const years = Number(window.prompt(`Renew ${selected.length} devices for how many years?`, '1')) || 1;
     try {
       await api.post('/devices/bulk-renew', { deviceIds: selected, years });
+      alert('Bulk renewal successful');
       fetchDevices();
-      alert('Devices renewed');
+      setSelected([]);
     } catch (error) {
       console.error('Bulk renew failed', error);
       alert('Bulk renew failed');
-    }
-  };
-
-  const handleCoTerm = async () => {
-    if (selected.length === 0) { alert('Select devices first'); return; }
-    const input = window.prompt('Enter target date (YYYY-MM-DD) or leave blank to align to end of year');
-    try {
-      await api.post('/devices/co-term', { deviceIds: selected, targetDate: input });
-      fetchDevices();
-      alert('Devices co-termed');
-    } catch (error) {
-      console.error('Co-term failed', error);
-      alert('Co-term failed');
     }
   };
 
@@ -138,21 +121,6 @@ const DeviceList: React.FC<{ clientId?: string }> = ({ clientId }) => {
   const [quoteNotes, setQuoteNotes] = useState('');
   const [targetQuoteDevices, setTargetQuoteDevices] = useState<string[]>([]);
 
-  const getTooltipText = (device: Device) => {
-    if (device.status === 'EXPIRING_SOON') {
-        return `Warning: If not renewed by ${new Date(device.expiryDate).toLocaleDateString()}, this screen will stop displaying content.`;
-    }
-    if (device.status === 'EXPIRED') {
-        let daysLeft = 0;
-        if (device.graceTokenExpiry) {
-             const diff = new Date(device.graceTokenExpiry).getTime() - new Date().getTime();
-             daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
-        }
-        return `Critical: This device is in Grace Period. Service will be suspended in ${daysLeft > 0 ? daysLeft : 0} days.`;
-    }
-    return '';
-  };
-
   const handleRequestRenewal = (id: string, name: string) => {
     setTargetRenewal({ id, name });
     setRenewalModalOpen(true);
@@ -181,286 +149,189 @@ const DeviceList: React.FC<{ clientId?: string }> = ({ clientId }) => {
     }
   };
 
-  const confirmRenewalRequest = async () => {
+  const submitRenewalRequest = async (notes: string) => {
     if (!targetRenewal) return;
     try {
-      await api.post('/requests', { notes: `Request for device ${targetRenewal.name}`, deviceIds: [targetRenewal.id] });
-      alert('Request sent');
+      await api.post('/requests', { 
+        deviceIds: [targetRenewal.id], 
+        notes,
+        type: 'RENEWAL' 
+      });
+      alert('Renewal request sent');
       setRenewalModalOpen(false);
       setTargetRenewal(null);
-      fetchDevices(); // Refresh to update button state
+      fetchDevices();
     } catch (error) {
-      console.error('Request failed', error);
-      alert('Request failed');
+      console.error('Failed to request renewal', error);
+      alert('Failed to send request');
     }
   };
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Devices</h2>
-        <div className="flex space-x-4 items-center">
-          <div className="flex bg-gray-100 rounded-lg p-1">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <div>
+            <h2 className="text-2xl font-bold text-slate-100 tracking-tight">Device Fleet</h2>
+            <p className="text-slate-500 text-sm mt-1">Manage and monitor all connected endpoints.</p>
+        </div>
+        
+        <div className="flex flex-wrap gap-3 items-center w-full md:w-auto">
+          {/* View Toggles */}
+          <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-500 hover:text-slate-300'}`}
               title="List View"
             >
-              <List className="h-5 w-5" />
+              <List className="h-4 w-4" />
             </button>
             <button
               onClick={() => setViewMode('map')}
-              className={`p-2 rounded-md transition-colors ${viewMode === 'map' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`p-2 rounded-md transition-all ${viewMode === 'map' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-500 hover:text-slate-300'}`}
               title="Map View"
             >
-              <MapIcon className="h-5 w-5" />
+              <MapIcon className="h-4 w-4" />
             </button>
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+
+          {/* Search */}
+          <div className="relative flex-grow md:flex-grow-0">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 h-4 w-4" />
             <input
               type="text"
               placeholder="Search devices..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500 w-64"
+              className="pl-9 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-full md:w-64 text-slate-200 placeholder-slate-600 text-sm"
             />
           </div>
-          <div className="relative">
-            <MapIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-            <input
-              type="text"
-              placeholder="Search screen by location..."
-              value={locationSearch}
-              onChange={(e) => {
-                setLocationSearch(e.target.value);
-                if (e.target.value) setViewMode('map');
-              }}
-              className="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500 w-64"
-            />
-          </div>
+
+          {/* Action Buttons */}
+          {user?.orgType === 'PARENT' && selected.length > 0 && (
+            <div className="flex gap-2">
+               <button
+                  onClick={handleBulkRenew}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20"
+                >
+                  Renew Selected ({selected.length})
+                </button>
+                <button
+                  onClick={() => handleIssueGrace()}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-purple-500/20"
+                >
+                  Issue Grace
+                </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {user?.orgType === 'PARENT' && viewMode === 'list' && (
-        <div className="mb-4 space-x-2">
-          {user.billingMode === 'RESELLER_ONLY' ? (
-            <button
-              onClick={() => handleRequestQuote(selected)}
-              disabled={selected.length === 0}
-              className={`px-3 py-1 text-white rounded text-sm ${selected.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-            >
-              Request Quote ({selected.length})
-            </button>
-          ) : (
-            <>
-              <button onClick={handleBulkRenew} className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">Bulk Renew</button>
-              <button onClick={handleCoTerm} className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700">Co-Term</button>
-            </>
-          )}
-          <button onClick={() => handleIssueGrace()} className="px-3 py-1 bg-orange-500 text-white rounded text-sm hover:bg-orange-600">Issue Grace</button>
+      {viewMode === 'map' ? (
+        <div className="rounded-xl border border-slate-800 overflow-hidden shadow-2xl">
+            <DeviceMap 
+              devices={filteredDevices} 
+              searchLocation={searchTerm} 
+              user={user}
+              onRenew={handleMapRenew}
+            />
         </div>
+      ) : (
+        <DeviceTable 
+            devices={filteredDevices}
+            loading={loading}
+            user={user}
+            onRenew={handleMapRenew}
+            selected={selected}
+            onSelect={setSelected}
+            onRemove={(device) => {
+                if (window.confirm(`Are you sure you want to remove ${device.name}? This action cannot be undone.`)) {
+                    api.delete(`/devices/${device.id}`)
+                       .then(() => {
+                           // Refresh list
+                           fetchDevices();
+                           // Remove from selected if needed
+                           if (selected.includes(device.id)) {
+                               setSelected(selected.filter(id => id !== device.id));
+                           }
+                       })
+                       .catch(err => {
+                           console.error("Failed to delete device", err);
+                           alert("Failed to remove device");
+                       });
+                }
+            }}
+        />
       )}
 
-      {viewMode === 'map' ? (
-        <DeviceMap 
-          devices={filteredDevices} 
-          searchLocation={locationSearch} 
-          user={user}
-          onRenew={handleMapRenew}
-        />
-      ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {user?.orgType === 'PARENT' && <th className="px-6 py-3 text-left"><input type="checkbox" onChange={(e) => {
-                  if (e.target.checked) setSelected(filteredDevices.map(d => d.id));
-                  else setSelected([]);
-                }} checked={selected.length === filteredDevices.length && filteredDevices.length > 0} /></th>}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Serial Number</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Organization</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loading ? (
-                <tr><td colSpan={user?.orgType === 'PARENT' ? 8 : 7} className="px-6 py-4 text-center">Loading...</td></tr>
-              ) : filteredDevices.length === 0 ? (
-                <tr><td colSpan={user?.orgType === 'PARENT' ? 8 : 7} className="px-6 py-4 text-center">No devices found</td></tr>
-              ) : (
-                filteredDevices.map((device) => (
-                  <tr key={device.id} className={selected.includes(device.id) ? 'bg-blue-50' : ''}>
-                    {user?.orgType === 'PARENT' && (
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <input 
-                          type="checkbox" 
-                          checked={selected.includes(device.id)} 
-                          onChange={() => toggleSelect(device.id)}
-                        />
-                      </td>
-                    )}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{device.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{device.serialNumber}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{device.location}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{device.organization.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                        ${device.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 
-                          device.status === 'EXPIRING_SOON' ? 'bg-yellow-100 text-yellow-800' : 
-                          device.status === 'EXPIRED' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
-                        {device.status}
-                      </span>
-                      {(device.status === 'EXPIRING_SOON' || device.status === 'EXPIRED') && (
-                        <div className="group relative inline-block ml-2 align-middle">
-                          <Info className="h-4 w-4 text-gray-400 cursor-help" />
-                          <div className="invisible group-hover:visible absolute z-50 w-64 p-2 mt-2 text-xs text-white bg-gray-800 rounded-lg shadow-lg -left-20 top-full whitespace-normal">
-                              {getTooltipText(device)}
-                          </div>
-                        </div>
-                      )}
-                      {device.graceTokenExpiry && new Date(device.graceTokenExpiry) > new Date() && (
-                         <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
-                           Grace Active
-                         </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(device.expiryDate).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {(device.status === 'EXPIRING_SOON' || device.status === 'EXPIRED') && (
-                        <div className="flex flex-col items-end space-y-1">
-                          {device.activeRenewalRequest ? (
-                            <div className="group relative inline-block">
-                              <button 
-                                disabled
-                                className="text-gray-400 cursor-not-allowed"
-                              >
-                                Renewal Requested
-                              </button>
-                              <div className="invisible group-hover:visible absolute z-50 w-64 p-2 mt-2 text-xs text-white bg-gray-800 rounded-lg shadow-lg -left-56 top-full whitespace-normal">
-                                Renewal requested has be raised to the head quatres and waiting for approval to request again wait for 6 hours.
-                              </div>
-                            </div>
-                          ) : (
-                            <button 
-                              onClick={() => handleMapRenew(device)}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              {user?.orgType === 'CHILD' ? 'Request Renewal' : 
-                               user?.billingMode === 'RESELLER_ONLY' ? 'Request Quote' : 'Renew'}
-                            </button>
-                          )}
-                          
-                          {user?.orgType === 'PARENT' && device.status === 'EXPIRED' && (
-                            device.graceTokenExpiry && new Date(device.graceTokenExpiry) > new Date() ? (
-                              <span className="text-purple-600 font-medium text-xs">
-                                On Grace Period
-                              </span>
-                            ) : (
-                              user.billingMode !== 'RESELLER_ONLY' && (
-                                <button 
-                                  onClick={() => handleIssueGrace(device.id)}
-                                  className="text-orange-600 hover:text-orange-900"
-                                >
-                                  Grace
-                                </button>
-                              )
-                            )
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-      
-      {quoteModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-start mb-4">
-               <h3 className="text-lg font-bold text-gray-900">Contact Reseller for Renewal</h3>
-               <button onClick={() => setQuoteModalOpen(false)} className="text-gray-400 hover:text-gray-500">
+      {/* Renewal Modal */}
+      {renewalModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-md shadow-2xl">
+             <div className="flex justify-between items-start mb-4">
+               <h3 className="text-lg font-bold text-slate-100">Request Renewal</h3>
+               <button onClick={() => setRenewalModalOpen(false)} className="text-slate-400 hover:text-white">
                  <X className="h-5 w-5" />
                </button>
             </div>
-            <p className="text-gray-600 mb-4">
-              You are managed by a Verified Reseller. Please request a custom quote for these {targetQuoteDevices.length} screens.
+            <p className="mb-4 text-slate-400 text-sm">
+              Requesting renewal for: <span className="font-semibold text-white">{targetRenewal?.name}</span>
             </p>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label>
-              <textarea
-                value={quoteNotes}
-                onChange={(e) => setQuoteNotes(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={3}
-                placeholder="E.g., Need urgent renewal for London store..."
-              />
-            </div>
+            <textarea
+              className="w-full border border-slate-700 bg-slate-950 rounded-lg p-3 mb-4 text-slate-200 focus:outline-none focus:border-blue-500 text-sm"
+              placeholder="Add notes for the admin (optional)..."
+              id="renewalNotes"
+              rows={3}
+            />
             <div className="flex justify-end space-x-3">
               <button
-                type="button"
-                onClick={() => setQuoteModalOpen(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                onClick={() => setRenewalModalOpen(false)}
+                className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
               >
                 Cancel
               </button>
               <button
-                type="button"
-                onClick={confirmQuoteRequest}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                onClick={() => submitRenewalRequest((document.getElementById('renewalNotes') as HTMLTextAreaElement).value)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors shadow-lg shadow-blue-500/20 text-sm font-medium"
               >
-                Send Quote Request
+                Send Request
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {renewalModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg w-full max-w-md shadow-xl">
+      {/* Quote Modal */}
+      {quoteModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-md shadow-2xl">
             <div className="flex justify-between items-start mb-4">
-               <h3 className="text-lg font-bold text-gray-900">Confirm Renewal Request</h3>
-               <button onClick={() => setRenewalModalOpen(false)} className="text-gray-400 hover:text-gray-500">
+               <h3 className="text-lg font-bold text-slate-100">Request Quote</h3>
+               <button onClick={() => setQuoteModalOpen(false)} className="text-slate-400 hover:text-white">
                  <X className="h-5 w-5" />
                </button>
             </div>
-            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
-              <div className="flex">
-                <div className="ml-3">
-                  <p className="text-sm text-blue-700">
-                    Notifying HQ is urgent. Expired licenses result in immediate loss of content playback control.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <p className="text-gray-600 mb-6">
-                Are you sure you want to request renewal for device <strong>{targetRenewal?.name}</strong>?
+            <p className="mb-4 text-slate-400 text-sm">
+              Requesting quote for {targetQuoteDevices.length} devices.
             </p>
+            <textarea
+              className="w-full border border-slate-700 bg-slate-950 rounded-lg p-3 mb-4 text-slate-200 focus:outline-none focus:border-blue-500 text-sm"
+              placeholder="Additional notes..."
+              value={quoteNotes}
+              onChange={(e) => setQuoteNotes(e.target.value)}
+              rows={3}
+            />
             <div className="flex justify-end space-x-3">
               <button
-                type="button"
-                onClick={() => setRenewalModalOpen(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                onClick={() => setQuoteModalOpen(false)}
+                className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
               >
                 Cancel
               </button>
               <button
-                type="button"
-                onClick={confirmRenewalRequest}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                onClick={confirmQuoteRequest}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors shadow-lg shadow-blue-500/20 text-sm font-medium"
               >
-                Confirm Request
+                Send Quote Request
               </button>
             </div>
           </div>

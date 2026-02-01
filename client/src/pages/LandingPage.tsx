@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { motion, useAnimation, useInView, animate, useMotionValue, useTransform, useSpring, useAnimationFrame } from 'framer-motion';
+import { motion, useInView, animate, useMotionValue, useTransform, useSpring, useAnimationFrame } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { CheckCircle, Bell, Shield, ArrowRight, Play, Clock, TrendingUp } from 'lucide-react';
+import { CheckCircle, Bell, Shield, ArrowRight, Play, TrendingUp } from 'lucide-react';
 import AllSeeLogo from '../assets/allsee-logo-colour.svg';
 
 const LandingPage: React.FC = () => {
@@ -98,7 +98,7 @@ const CylindricalCarousel = () => {
   const autoRotate = useMotionValue(0);
   
   // Infinite rotation loop
-  useAnimationFrame((t, delta) => {
+  useAnimationFrame((_t, delta) => {
     const rotationSpeed = 10; // degrees per second
     autoRotate.set(autoRotate.get() + (rotationSpeed * delta) / 1000);
   });
@@ -108,7 +108,10 @@ const CylindricalCarousel = () => {
   const mouseOffset = useTransform(mouseX, [0, window.innerWidth], [180, -180]);
   
   // Combine auto-rotation and mouse interaction
-  const combinedRotation = useTransform([autoRotate, mouseOffset], ([auto, mouse]) => auto + mouse);
+  const combinedRotation = useTransform([autoRotate, mouseOffset], (values) => {
+    const [auto, mouse] = values as number[];
+    return auto + mouse;
+  });
   const smoothRotation = useSpring(combinedRotation, { stiffness: 30, damping: 30 });
 
   const handleMouseMove = (e: React.MouseEvent) => {

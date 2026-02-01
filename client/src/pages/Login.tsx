@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, Building, ArrowRight, Activity } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Lock, Mail, ArrowRight, Activity } from 'lucide-react';
+import { motion } from 'framer-motion';
 import AllSeeLogo from '../assets/allsee-logo-colour.svg';
 
 const Login: React.FC = () => {
@@ -130,11 +130,11 @@ const Login: React.FC = () => {
 
           {/* Persona Switcher (Segmented Control) */}
           <div className="bg-gray-800/50 p-1 rounded-xl flex mb-8 relative">
-            {['direct', 'reseller', 'partner'].map((s) => (
+            {['direct', 'reseller', 'partner', 'child'].map((s) => (
               <button
                 key={s}
                 onClick={() => handleScenarioChange(s as any)}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg relative z-10 transition-colors ${
+                className={`flex-1 py-2 text-xs font-medium rounded-lg relative z-10 transition-colors ${
                   scenario === s ? 'text-white' : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
@@ -146,7 +146,7 @@ const Login: React.FC = () => {
                   />
                 )}
                 <span className="relative z-10 capitalize">
-                  {s === 'direct' ? 'Direct Client' : s === 'reseller' ? 'Reseller Client' : 'Partner'}
+                  {s === 'direct' ? 'Organisation' : s === 'reseller' ? 'Reseller-client' : s === 'partner' ? 'Reseller' : 'manager-COrg'}
                 </span>
               </button>
             ))}
