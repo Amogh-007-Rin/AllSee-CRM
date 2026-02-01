@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Search, Map as MapIcon, List } from 'lucide-react';
+import { Search, Map as MapIcon, List, Info, X } from 'lucide-react';
 import DeviceMap from './DeviceMap';
 
 interface Device {
@@ -17,6 +17,7 @@ interface Device {
   organization: {
     name: string;
   };
+  activeRenewalRequest?: boolean;
 }
 
 const DeviceList: React.FC = () => {
@@ -59,7 +60,6 @@ const DeviceList: React.FC = () => {
     const years = Number(window.prompt('Renew for how many years?', '1')) || 1;
     try {
       await api.post('/devices/bulk-renew', { deviceIds: selected, years });
-      setSelected([]);
       fetchDevices();
       alert('Devices renewed');
     } catch (error) {
@@ -73,7 +73,6 @@ const DeviceList: React.FC = () => {
     const input = window.prompt('Enter target date (YYYY-MM-DD) or leave blank to align to end of year');
     try {
       await api.post('/devices/co-term', { deviceIds: selected, targetDate: input });
-      setSelected([]);
       fetchDevices();
       alert('Devices co-termed');
     } catch (error) {
@@ -103,10 +102,37 @@ const DeviceList: React.FC = () => {
     }
   };
 
-  const handleRequestRenewal = async (id: string, name: string) => {
+  const [renewalModalOpen, setRenewalModalOpen] = useState(false);
+  const [targetRenewal, setTargetRenewal] = useState<{id: string, name: string} | null>(null);
+
+  const getTooltipText = (device: Device) => {
+    if (device.status === 'EXPIRING_SOON') {
+        return `Warning: If not renewed by ${new Date(device.expiryDate).toLocaleDateString()}, this screen will stop displaying content.`;
+    }
+    if (device.status === 'EXPIRED') {
+        let daysLeft = 0;
+        if (device.graceTokenExpiry) {
+             const diff = new Date(device.graceTokenExpiry).getTime() - new Date().getTime();
+             daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+        }
+        return `Critical: This device is in Grace Period. Service will be suspended in ${daysLeft > 0 ? daysLeft : 0} days.`;
+    }
+    return '';
+  };
+
+  const handleRequestRenewal = (id: string, name: string) => {
+    setTargetRenewal({ id, name });
+    setRenewalModalOpen(true);
+  };
+
+  const confirmRenewalRequest = async () => {
+    if (!targetRenewal) return;
     try {
-      await api.post('/requests', { notes: `Request for device ${name}`, deviceIds: [id] });
+      await api.post('/requests', { notes: `Request for device ${targetRenewal.name}`, deviceIds: [targetRenewal.id] });
       alert('Request sent');
+      setRenewalModalOpen(false);
+      setTargetRenewal(null);
+      fetchDevices(); // Refresh to update button state
     } catch (error) {
       console.error('Request failed', error);
       alert('Request failed');
@@ -216,6 +242,14 @@ const DeviceList: React.FC = () => {
                           device.status === 'EXPIRED' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
                         {device.status}
                       </span>
+                      {(device.status === 'EXPIRING_SOON' || device.status === 'EXPIRED') && (
+                        <div className="group relative inline-block ml-2 align-middle">
+                          <Info className="h-4 w-4 text-gray-400 cursor-help" />
+                          <div className="invisible group-hover:visible absolute z-50 w-64 p-2 mt-2 text-xs text-white bg-gray-800 rounded-lg shadow-lg -left-20 top-full whitespace-normal">
+                              {getTooltipText(device)}
+                          </div>
+                        </div>
+                      )}
                       {device.graceTokenExpiry && new Date(device.graceTokenExpiry) > new Date() && (
                          <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
                            Grace Active
@@ -227,12 +261,26 @@ const DeviceList: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       {user?.orgType === 'CHILD' && (device.status === 'EXPIRING_SOON' || device.status === 'EXPIRED') && (
-                        <button 
-                          onClick={() => handleRequestRenewal(device.id, device.name)}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          Renew
-                        </button>
+                        device.activeRenewalRequest ? (
+                          <div className="group relative inline-block">
+                            <button 
+                              disabled
+                              className="text-gray-400 cursor-not-allowed"
+                            >
+                              Renewal Requested
+                            </button>
+                            <div className="invisible group-hover:visible absolute z-50 w-64 p-2 mt-2 text-xs text-white bg-gray-800 rounded-lg shadow-lg -left-56 top-full whitespace-normal">
+                              Renewal requested has be raised to the head quatres and waiting for approval to request again wait for 6 hours.
+                            </div>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => handleRequestRenewal(device.id, device.name)}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            Renew
+                          </button>
+                        )
                       )}
                       {user?.orgType === 'PARENT' && device.status === 'EXPIRED' && (
                         <button 
@@ -248,6 +296,47 @@ const DeviceList: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+      
+      {renewalModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg w-full max-w-md shadow-xl">
+            <div className="flex justify-between items-start mb-4">
+               <h3 className="text-lg font-bold text-gray-900">Confirm Renewal Request</h3>
+               <button onClick={() => setRenewalModalOpen(false)} className="text-gray-400 hover:text-gray-500">
+                 <X className="h-5 w-5" />
+               </button>
+            </div>
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+              <div className="flex">
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    Notifying HQ is urgent. Expired licenses result in immediate loss of content playback control.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <p className="text-gray-600 mb-6">
+                Are you sure you want to request renewal for device <strong>{targetRenewal?.name}</strong>?
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setRenewalModalOpen(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmRenewalRequest}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+              >
+                Confirm Request
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

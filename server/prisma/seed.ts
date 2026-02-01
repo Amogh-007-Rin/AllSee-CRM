@@ -28,23 +28,21 @@ async function main() {
     },
   })
 
-  const london = await prisma.organization.create({
-    data: {
-      name: 'London Flagship',
-      type: OrgType.CHILD,
-      parentId: hq.id,
-    },
-  })
+  // Define UK Cities with coordinates
+  const ukCities = [
+    { name: 'London Flagship', lat: 51.5074, lng: -0.1278, userEmail: 'london' },
+    { name: 'Manchester Outlet', lat: 53.4808, lng: -2.2426, userEmail: 'manchester' },
+    { name: 'Birmingham Store', lat: 52.4862, lng: -1.8904, userEmail: 'birmingham' },
+    { name: 'Leeds Branch', lat: 53.8008, lng: -1.5491, userEmail: 'leeds' },
+    { name: 'Glasgow Hub', lat: 55.8642, lng: -4.2518, userEmail: 'glasgow' },
+    { name: 'Edinburgh Center', lat: 55.9533, lng: -3.1883, userEmail: 'edinburgh' },
+    { name: 'Liverpool Dock', lat: 53.4084, lng: -2.9916, userEmail: 'liverpool' },
+    { name: 'Bristol Plaza', lat: 51.4545, lng: -2.5879, userEmail: 'bristol' },
+    { name: 'Cardiff Bay', lat: 51.4816, lng: -3.1791, userEmail: 'cardiff' },
+    { name: 'Belfast City', lat: 54.5973, lng: -5.9301, userEmail: 'belfast' }
+  ]
 
-  const manchester = await prisma.organization.create({
-    data: {
-      name: 'Manchester Outlet',
-      type: OrgType.CHILD,
-      parentId: hq.id,
-    },
-  })
-
-  // 2. Create Users
+  // 2. Create Users & Child Orgs
   await prisma.user.create({
     data: {
       email: 'admin@hq.com',
@@ -55,108 +53,107 @@ async function main() {
     },
   })
 
-  await prisma.user.create({
-    data: {
-      email: 'manager@london.com',
-      password: 'password123',
-      name: 'London Manager',
-      role: UserRole.VIEWER,
-      organizationId: london.id,
-    },
-  })
-
-  // 3. Create Devices
   const today = new Date()
 
-  // London Devices
-  // 3 Active (Expiry: Today + 120 days)
-  for (let i = 1; i <= 3; i++) {
-    const expiryDate = new Date(today)
-    expiryDate.setDate(today.getDate() + 120)
-    await prisma.device.create({
+  for (const city of ukCities) {
+    // Create Child Org
+    const childOrg = await prisma.organization.create({
       data: {
-        name: `London Active Screen ${i}`,
-        location: 'London Store',
-        serialNumber: `LDN-ACT-${i}`,
-        status: LicenseStatus.ACTIVE,
-        expiryDate: expiryDate,
-        latitude: 51.5074 + (Math.random() * 0.01 - 0.005),
-        longitude: -0.1278 + (Math.random() * 0.01 - 0.005),
-        organizationId: london.id,
+        name: city.name,
+        type: OrgType.CHILD,
+        parentId: hq.id,
       },
     })
-  }
 
-  // 3 Expiring Soon (Expiry: Today + 30 days)
-  for (let i = 1; i <= 3; i++) {
-    const expiryDate = new Date(today)
-    expiryDate.setDate(today.getDate() + 30)
-    await prisma.device.create({
+    // Create User for Child Org
+    await prisma.user.create({
       data: {
-        name: `London Warning Screen ${i}`,
-        location: 'London Store',
-        serialNumber: `LDN-WARN-${i}`,
-        status: LicenseStatus.EXPIRING_SOON,
-        expiryDate: expiryDate,
-        latitude: 51.5074 + (Math.random() * 0.01 - 0.005),
-        longitude: -0.1278 + (Math.random() * 0.01 - 0.005),
-        organizationId: london.id,
+        email: `manager@${city.userEmail}.com`,
+        password: 'password123',
+        name: `${city.name} Manager`,
+        role: UserRole.VIEWER,
+        organizationId: childOrg.id,
       },
     })
-  }
 
-  // 4 Expired (Expiry: Today - 5 days)
-  for (let i = 1; i <= 4; i++) {
-    const expiryDate = new Date(today)
-    expiryDate.setDate(today.getDate() - 5)
-    await prisma.device.create({
-      data: {
-        name: `London Expired Screen ${i}`,
-        location: 'London Store',
-        serialNumber: `LDN-EXP-${i}`,
-        status: LicenseStatus.EXPIRED,
-        expiryDate: expiryDate,
-        latitude: 51.5074 + (Math.random() * 0.01 - 0.005),
-        longitude: -0.1278 + (Math.random() * 0.01 - 0.005),
-        organizationId: london.id,
-      },
-    })
-  }
+    // Create Mixed Status Devices for each Org
+    
+    // 1. ACTIVE (Expiry: Today + 120 days)
+    for (let i = 1; i <= 2; i++) {
+      const expiryDate = new Date(today)
+      expiryDate.setDate(today.getDate() + 120 + Math.floor(Math.random() * 60))
+      await prisma.device.create({
+        data: {
+          name: `${city.name} Active Screen ${i}`,
+          location: city.name,
+          serialNumber: `${city.userEmail.toUpperCase()}-ACT-${i}`,
+          status: LicenseStatus.ACTIVE,
+          expiryDate: expiryDate,
+          latitude: city.lat + (Math.random() * 0.02 - 0.01),
+          longitude: city.lng + (Math.random() * 0.02 - 0.01),
+          organizationId: childOrg.id,
+        },
+      })
+    }
 
-  // Manchester Devices (Child Org)
-  // 2 Active
-  for (let i = 1; i <= 2; i++) {
-    const expiryDate = new Date(today)
-    expiryDate.setDate(today.getDate() + 200)
-    await prisma.device.create({
-      data: {
-        name: `Manchester Screen ${i}`,
-        location: 'Manchester Outlet',
-        serialNumber: `MAN-ACT-${i}`,
-        status: LicenseStatus.ACTIVE,
-        expiryDate: expiryDate,
-        latitude: 53.4808 + (Math.random() * 0.01 - 0.005),
-        longitude: -2.2426 + (Math.random() * 0.01 - 0.005),
-        organizationId: manchester.id,
-      },
-    })
-  }
+    // 2. EXPIRING_SOON (Expiry: Today + 10-30 days)
+    for (let i = 1; i <= 2; i++) {
+      const expiryDate = new Date(today)
+      expiryDate.setDate(today.getDate() + 10 + Math.floor(Math.random() * 20))
+      await prisma.device.create({
+        data: {
+          name: `${city.name} Warning Screen ${i}`,
+          location: city.name,
+          serialNumber: `${city.userEmail.toUpperCase()}-WARN-${i}`,
+          status: LicenseStatus.EXPIRING_SOON,
+          expiryDate: expiryDate,
+          latitude: city.lat + (Math.random() * 0.02 - 0.01),
+          longitude: city.lng + (Math.random() * 0.02 - 0.01),
+          organizationId: childOrg.id,
+        },
+      })
+    }
 
-  // Manchester Devices
-  // 5 Suspended (Expiry: Today - 20 days)
-  for (let i = 1; i <= 5; i++) {
-    const expiryDate = new Date(today)
-    expiryDate.setDate(today.getDate() - 20)
-    await prisma.device.create({
-      data: {
-        name: `Manchester Suspended Screen ${i}`,
-        location: 'Manchester Outlet',
-        serialNumber: `MAN-SUSP-${i}`,
-        status: LicenseStatus.SUSPENDED,
-        expiryDate: expiryDate,
-        organizationId: manchester.id,
-      },
-    })
+    // 3. EXPIRED (Expiry: Today - 5 days, Grace Token Active)
+    for (let i = 1; i <= 2; i++) {
+      const expiryDate = new Date(today)
+      expiryDate.setDate(today.getDate() - 5)
+      // Set grace token to expire in 2 days from now
+      const graceDate = new Date(today)
+      graceDate.setDate(today.getDate() + 2)
+      
+      await prisma.device.create({
+        data: {
+          name: `${city.name} Expired Screen ${i}`,
+          location: city.name,
+          serialNumber: `${city.userEmail.toUpperCase()}-EXP-${i}`,
+          status: LicenseStatus.EXPIRED,
+          expiryDate: expiryDate,
+          graceTokenExpiry: graceDate,
+          latitude: city.lat + (Math.random() * 0.02 - 0.01),
+          longitude: city.lng + (Math.random() * 0.02 - 0.01),
+          organizationId: childOrg.id,
+        },
+      })
+    }
+
+    // 4. SUSPENDED (Expiry: Today - 30 days)
+    for (let i = 1; i <= 1; i++) {
+      const expiryDate = new Date(today)
+      expiryDate.setDate(today.getDate() - 30)
+      await prisma.device.create({
+        data: {
+          name: `${city.name} Suspended Screen ${i}`,
+          location: city.name,
+          serialNumber: `${city.userEmail.toUpperCase()}-SUSP-${i}`,
+          status: LicenseStatus.SUSPENDED,
+          expiryDate: expiryDate,
+          latitude: city.lat + (Math.random() * 0.02 - 0.01),
+          longitude: city.lng + (Math.random() * 0.02 - 0.01),
+          organizationId: childOrg.id,
+        },
+      })
+    }
   }
 
   console.log('Seeding completed successfully')

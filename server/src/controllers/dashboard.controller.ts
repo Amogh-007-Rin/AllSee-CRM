@@ -115,7 +115,28 @@ export const getDevices = async (req: AuthRequest, res: Response) => {
       orderBy: { expiryDate: 'asc' }
     });
 
-    res.json(devices);
+    // Check for active renewal requests (created in the last 6 hours)
+    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    
+    const pendingRequests = await prisma.renewalRequest.findMany({
+      where: {
+        status: 'PENDING',
+        createdAt: { gt: sixHoursAgo },
+      },
+      select: { deviceIds: true }
+    });
+
+    const pendingDeviceIds = new Set<string>();
+    pendingRequests.forEach(req => {
+        req.deviceIds.forEach(id => pendingDeviceIds.add(id));
+    });
+
+    const devicesWithFlag = devices.map(device => ({
+        ...device,
+        activeRenewalRequest: pendingDeviceIds.has(device.id)
+    }));
+
+    res.json(devicesWithFlag);
   } catch (error) {
     console.error('Get devices error:', error);
     res.status(500).json({ message: 'Server error' });

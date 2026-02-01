@@ -2,10 +2,56 @@ import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import StatsCard from '../components/StatsCard';
 import api from '../services/api';
-import { CheckCircle, AlertTriangle, XCircle, Ban } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Ban, X } from 'lucide-react';
 import { Routes, Route } from 'react-router-dom';
 import DeviceList from '../components/DeviceList';
 import RequestManager from '../components/RequestManager';
+import { useAuth } from '../context/AuthContext';
+
+const RiskBanner: React.FC = () => {
+  const { user } = useAuth();
+  const [visible, setVisible] = useState(true);
+  const [riskCount, setRiskCount] = useState(0);
+
+  useEffect(() => {
+    if (user?.orgType === 'CHILD') {
+      api.get('/dashboard/stats').then(res => {
+        const summary = res.data.summary;
+        const count = (summary.warning || 0) + (summary.expired || 0);
+        setRiskCount(count);
+      }).catch(err => console.error(err));
+    }
+  }, [user]);
+
+  if (!visible || riskCount === 0 || user?.orgType !== 'CHILD') return null;
+
+  return (
+    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 relative mx-6 mt-6">
+      <div className="flex">
+        <div className="flex-shrink-0">
+          <AlertTriangle className="h-5 w-5 text-yellow-400" aria-hidden="true" />
+        </div>
+        <div className="ml-3">
+          <p className="text-sm text-yellow-700">
+            Action Required: <span className="font-bold">{riskCount}</span> screens are at risk of going black. 
+            Please request renewal from HQ to prevent service disruption.
+          </p>
+        </div>
+        <div className="ml-auto pl-3">
+          <div className="-mx-1.5 -my-1.5">
+            <button
+              onClick={() => setVisible(false)}
+              className="inline-flex bg-yellow-50 rounded-md p-1.5 text-yellow-500 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-yellow-50 focus:ring-yellow-600"
+            >
+              <span className="sr-only">Dismiss</span>
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const DashboardHome: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
@@ -68,6 +114,7 @@ const DashboardHome: React.FC = () => {
 const Dashboard: React.FC = () => {
   return (
     <Layout>
+      <RiskBanner />
       <Routes>
         <Route path="/" element={<DashboardHome />} />
         <Route path="/devices" element={<DeviceList />} />

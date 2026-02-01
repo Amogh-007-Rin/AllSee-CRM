@@ -113,7 +113,7 @@ const DeviceMap: React.FC<DeviceMapProps> = ({ devices, searchLocation }) => {
   const tileLayerUrl = import.meta.env.VITE_MAP_TILE_LAYER_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
   return (
-    <div className="h-[600px] w-full rounded-lg overflow-hidden border border-gray-200 shadow-md z-0">
+    <div className="h-[calc(100vh-12rem)] w-full rounded-lg overflow-hidden border border-gray-200 shadow-md z-0">
       <MapContainer 
         center={defaultCenter} 
         zoom={6} 
