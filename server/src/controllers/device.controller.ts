@@ -134,3 +134,47 @@ export const issueGraceToken = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// Parent or Reseller - Delete a device
+export const deleteDevice = async (req: AuthRequest, res: Response) => {
+  try {
+    const { orgId, orgType } = req.user!;
+    const id = String(req.params.id);
+
+    if (orgType !== OrgType.PARENT && orgType !== OrgType.RESELLER) {
+      return res.status(403).json({ message: 'Permission denied.' });
+    }
+
+    const device = await prisma.device.findUnique({ where: { id } });
+    if (!device) return res.status(404).json({ message: 'Device not found' });
+
+    // Security Check: Ensure device belongs to hierarchy
+    let hasAccess = false;
+    if (orgType === OrgType.PARENT) {
+      const org = await prisma.organization.findFirst({ where: { id: device.organizationId, parentId: orgId } });
+      if (org || device.organizationId === orgId) hasAccess = true;
+    } else if (orgType === OrgType.RESELLER) {
+      const client = await prisma.organization.findFirst({ where: { id: device.organizationId, resellerId: orgId } });
+      if (client) hasAccess = true;
+      // Also check children of clients
+      if (!hasAccess) {
+         const parentOrg = await prisma.organization.findUnique({ where: { id: device.organizationId } });
+         if (parentOrg?.parentId) {
+             const grandParent = await prisma.organization.findFirst({ where: { id: parentOrg.parentId, resellerId: orgId } });
+             if (grandParent) hasAccess = true;
+         }
+      }
+    }
+
+    if (!hasAccess) {
+        return res.status(403).json({ message: 'You do not have permission to delete this device.' });
+    }
+
+    await prisma.device.delete({ where: { id } });
+
+    res.json({ message: 'Device deleted successfully' });
+  } catch (error) {
+    console.error('Delete device error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
