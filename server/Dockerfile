@@ -1,6 +1,6 @@
 FROM node:22-alpine
 
-WORKDIR /app/client
+WORKDIR /app/server
 
 COPY package.json package-lock.json ./
 
@@ -8,10 +8,9 @@ RUN npm install
 
 COPY . .
 
-ARG VITE_MAP_TILE_LAYER_URL
-ENV VITE_MAP_TILE_LAYER_URL=$VITE_MAP_TILE_LAYER_URL
+RUN npx prisma generate
 
-EXPOSE 5173
+EXPOSE 3000
 
 CMD [ "npm", "run", "dev", "--", "--host" ]
 

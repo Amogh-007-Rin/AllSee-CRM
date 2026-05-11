@@ -1,0 +1,23 @@
+services:
+
+## Client Service
+  client:
+    build:
+      context: ./client
+      args:
+        VITE_MAP_TILE_LAYER_URL: ./client
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_MAP_TILE_LAYER_URL: https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
+    restart: unless-stopped
+
+## Server Service
+  server:
+    build:
+      context: ./server
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://neondb_owner:npg_klVAFX8tT9Ys@ep-nameless-moon-apbsol0c.c-7.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+    restart: unless-stopped
